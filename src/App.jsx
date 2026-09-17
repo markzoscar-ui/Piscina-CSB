@@ -5577,6 +5577,19 @@ function VoiceAssistant() {
 
   const recognitionRef = useRef(null);
   const chatEndRef = useRef(null);
+  const [voicesList, setVoicesList] = useState([]);
+
+  // Cargar lista de voces del navegador de forma asíncrona (onvoiceschanged)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const cargarVoces = () => {
+        const voices = window.speechSynthesis.getVoices();
+        setVoicesList(voices);
+      };
+      cargarVoces();
+      window.speechSynthesis.onvoiceschanged = cargarVoces;
+    }
+  }, []);
 
   // Auto-scroll al último mensaje
   useEffect(() => {
@@ -5623,28 +5636,40 @@ function VoiceAssistant() {
     }
   }, []);
 
-  // Función para sintetizar voz en castellano neutro
+  // Función para sintetizar voz humana y fluida en castellano neutro
   const speakText = (text) => {
     if (voiceMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     
     // Cancelar emisiones anteriores
     window.speechSynthesis.cancel();
 
-    // Limpiar emojis y markdown para una lectura natural
-    const textoLimpio = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
-                            .replace(/\*/g, '')
-                            .replace(/#/g, '');
+    // Limpiar emojis, bullets y markdown para una lectura hablada humana y fluida
+    const textoLimpio = text
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+      .replace(/•/g, '. ')
+      .replace(/\*/g, '')
+      .replace(/#/g, '')
+      .replace(/\n+/g, '. ');
 
     const utterance = new SpeechSynthesisUtterance(textoLimpio);
     utterance.lang = 'es-ES';
-    utterance.rate = 1.0;
+    utterance.rate = 0.95; // Ritmo ligeramente más pausado y cálido para evitar el efecto robótico
     utterance.pitch = 1.0;
 
-    // Buscar voz en castellano de España
-    const voices = window.speechSynthesis.getVoices();
-    const spanishVoice = voices.find(v => (v.lang === 'es-ES' || v.lang === 'es_ES') && (v.name.includes('Google') || v.name.includes('Monica') || v.name.includes('Jorge') || v.name.includes('Helena') || v.name.includes('Spanish')));
-    if (spanishVoice) {
-      utterance.voice = spanishVoice;
+    // ALGORITMO DE SELECCIÓN DE VOZ NATURAL / NEURAL HUMANA EN CASTELLANO:
+    const voices = voicesList.length > 0 ? voicesList : window.speechSynthesis.getVoices();
+    const spanishVoices = voices.filter(v => v.lang.startsWith('es'));
+
+    // 1. Prioridad Máxima: Voces Neurales / Naturales (Microsoft Edge, Chrome HD, Apple Enhanced)
+    const vozNatural = spanishVoices.find(v => 
+      (v.lang === 'es-ES' || v.lang === 'es_ES') && 
+      (v.name.includes('Natural') || v.name.includes('Enhanced') || v.name.includes('Online') || v.name.includes('Neural') || v.name.includes('Alvaro') || v.name.includes('Elvira') || v.name.includes('Google') || v.name.includes('Monica') || v.name.includes('Jorge') || v.name.includes('Helena'))
+    ) || spanishVoices.find(v => v.name.includes('Natural') || v.name.includes('Enhanced') || v.name.includes('Online') || v.name.includes('Neural'))
+      || spanishVoices.find(v => v.lang === 'es-ES' || v.lang === 'es_ES')
+      || spanishVoices[0];
+
+    if (vozNatural) {
+      utterance.voice = vozNatural;
     }
 
     utterance.onstart = () => setSpeaking(true);
